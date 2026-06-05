@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { Card, Pill, SectionHeader } from "@/components/ui-kit";
+import { toast } from "sonner";
+import { runGitClawAgent } from "../actions/agent.actions";
 import {
   Plus,
   GitPullRequest,
@@ -38,13 +41,47 @@ function AutomationsPage() {
   const [enabled, setEnabled] = useState(true);
   const [rules, setRules] = useState(savedRules);
 
+  // --- INTEGRATED AGENT PIPELINE MUTATION ---
+  const agentMutation = useMutation({
+    mutationFn: async () => {
+      // This now securely calls your actual agent.server.ts file via RPC!
+      return await runGitClawAgent({
+        data: {
+          repository: repo,
+          issueTitle: "Critical Bug: Hydration mismatch breaking authentication cookie sync",
+          issueBody:
+            "When calling validation workflows using edge-native middleware setups, token sync parsing returns intermittent schema failures.",
+        },
+      });
+    },
+    onMutate: () => {
+      toast.loading(
+        "TrustClaw intercepting pipeline... Routing sub-tasks through Neurometric SLM.",
+        { id: "agent-pipeline" },
+      );
+    },
+    onSuccess: (response) => {
+      if (response.success) {
+        toast.success("Agent sequence complete! Platforms synchronized via Composio.", {
+          id: "agent-pipeline",
+        });
+        console.log("🚀 Live Agent Telemetry:", response.logs);
+      } else {
+        toast.error(`Agent tracking failed: ${response.error}`, { id: "agent-pipeline" });
+      }
+    },
+    onError: (err: any) => {
+      toast.error(`Network or Server Failure: ${err.message}`, { id: "agent-pipeline" });
+    },
+  });
+
   return (
     <AppShell>
       <SectionHeader
         title="Automation Rules"
         description="Compose triggers and actions. Routed through Neurometric, executed via Composio."
         action={
-          <button className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition">
+          <button className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition cursor-pointer">
             <Plus className="h-3.5 w-3.5" /> New rule
           </button>
         }
@@ -62,7 +99,7 @@ function AutomationsPage() {
               </div>
               <button
                 onClick={() => setEnabled((v) => !v)}
-                className="inline-flex items-center gap-1.5 text-xs"
+                className="inline-flex items-center gap-1.5 text-xs cursor-pointer"
               >
                 <span className="text-muted-foreground">Enabled</span>
                 <span
@@ -93,10 +130,12 @@ function AutomationsPage() {
                     <select
                       value={repo}
                       onChange={(e) => setRepo(e.target.value)}
-                      className="appearance-none bg-muted/40 border border-border rounded-md pl-2.5 pr-7 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="appearance-none bg-muted/40 border border-border rounded-md pl-2.5 pr-7 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
                     >
                       {repos.map((r) => (
-                        <option key={r}>{r}</option>
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
                       ))}
                     </select>
                     <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
@@ -155,10 +194,14 @@ function AutomationsPage() {
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-2">
-              <button className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs font-medium hover:bg-muted transition">
-                Test run
+              <button
+                onClick={() => agentMutation.mutate()}
+                disabled={agentMutation.isPending}
+                className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs font-medium hover:bg-muted transition disabled:opacity-50 cursor-pointer"
+              >
+                {agentMutation.isPending ? "Executing Agent..." : "Test run"}
               </button>
-              <button className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition">
+              <button className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 transition cursor-pointer">
                 Save rule
               </button>
             </div>
@@ -189,10 +232,8 @@ function AutomationsPage() {
                         prev.map((x, j) => (i === j ? { ...x, enabled: !x.enabled } : x)),
                       )
                     }
-                    className={`shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${
-                      r.enabled
-                        ? "bg-primary/15 text-primary"
-                        : "bg-muted text-muted-foreground"
+                    className={`shrink-0 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold cursor-pointer ${
+                      r.enabled ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                     }`}
                   >
                     <Power className="h-3 w-3" /> {r.enabled ? "ON" : "OFF"}
@@ -200,7 +241,10 @@ function AutomationsPage() {
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span className="font-mono">{r.runs.toLocaleString()} runs</span>
-                  <button className="hover:text-destructive transition" aria-label="Delete">
+                  <button
+                    className="hover:text-destructive transition cursor-pointer"
+                    aria-label="Delete"
+                  >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -256,7 +300,7 @@ function RuleStep({
 function Connector() {
   return (
     <div className="flex justify-center">
-      <div className="h-5 w-px bg-gradient-to-b from-border to-transparent" />
+      <div className="h-5 w-px bg-linear-to-b from-border to-transparent" />
     </div>
   );
 }
